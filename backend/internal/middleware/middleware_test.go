@@ -1,10 +1,12 @@
-package main
+package middleware
 
 import (
 	"net/http"
 	"testing"
 	"time"
 
+	"github.com/autherain/test/internal/app"
+	"github.com/autherain/test/internal/context"
 	"github.com/autherain/test/internal/user"
 	"github.com/autherain/test/internal/user/mocks"
 	"github.com/gavv/httpexpect/v2"
@@ -23,22 +25,22 @@ func newTestExpect(t *testing.T, handler http.Handler) *httpexpect.Expect {
 func TestAuthenticate(t *testing.T) {
 	t.Run("Adds valid authenticated user to request context", func(t *testing.T) {
 		mockStore := mocks.NewMockUsersReadWriter(t)
-		
+
 		aliceUser := &user.User{
-			ID:               testUsers["alice"].id,
-			Email:            testUsers["alice"].email,
-			HashedPassword:   testUsers["alice"].hashedPassword,
-			SubscriptionTier: testUsers["alice"].subscriptionTier,
+			ID:               app.TestUsers["alice"].ID,
+			Email:            app.TestUsers["alice"].Email,
+			HashedPassword:   app.TestUsers["alice"].HashedPassword,
+			SubscriptionTier: app.TestUsers["alice"].SubscriptionTier,
 		}
-		
+
 		mockStore.EXPECT().
-			ReadUser(&user.UserSelector{ID: testUsers["alice"].id}).
+			ReadUser(&user.UserSelector{ID: app.TestUsers["alice"].ID}).
 			Return(aliceUser, true, nil).
 			Once()
 
-		app := newTestApplication(t, mockStore)
+		appInstance := app.NewTestApplication(t, mockStore)
 
-		jwt, _, err := app.newAuthenticationToken(testUsers["alice"].id)
+		jwt, _, err := appInstance.NewAuthenticationToken(app.TestUsers["alice"].ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -46,11 +48,11 @@ func TestAuthenticate(t *testing.T) {
 		var capturedUser user.User
 		var capturedFound bool
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			capturedUser, capturedFound = contextGetAuthenticatedUser(r)
+			capturedUser, capturedFound = context.GetAuthenticatedUser(r)
 			w.WriteHeader(http.StatusTeapot)
 		})
 
-		e := newTestExpect(t, app.authenticate(next))
+		e := newTestExpect(t, Authenticate(appInstance)(next))
 		e.GET("/test").
 			WithHeader("Authorization", "Bearer "+jwt).
 			Expect().
@@ -59,24 +61,24 @@ func TestAuthenticate(t *testing.T) {
 		if !capturedFound {
 			t.Error("expected user to be found in context")
 		}
-		if capturedUser.ID != testUsers["alice"].id {
-			t.Errorf("expected user ID %d, got %d", testUsers["alice"].id, capturedUser.ID)
+		if capturedUser.ID != app.TestUsers["alice"].ID {
+			t.Errorf("expected user ID %d, got %d", app.TestUsers["alice"].ID, capturedUser.ID)
 		}
-		if capturedUser.Email != testUsers["alice"].email {
-			t.Errorf("expected user email %s, got %s", testUsers["alice"].email, capturedUser.Email)
+		if capturedUser.Email != app.TestUsers["alice"].Email {
+			t.Errorf("expected user email %s, got %s", app.TestUsers["alice"].Email, capturedUser.Email)
 		}
 	})
 
 	t.Run("Does not add user when no authenticated user ID in request JWT", func(t *testing.T) {
-		app := newTestApplication(t)
+		appInstance := app.NewTestApplication(t)
 
 		var capturedFound bool
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_, capturedFound = contextGetAuthenticatedUser(r)
+			_, capturedFound = context.GetAuthenticatedUser(r)
 			w.WriteHeader(http.StatusTeapot)
 		})
 
-		e := newTestExpect(t, app.authenticate(next))
+		e := newTestExpect(t, Authenticate(appInstance)(next))
 		e.GET("/test").
 			Expect().
 			Status(http.StatusTeapot)
@@ -88,27 +90,27 @@ func TestAuthenticate(t *testing.T) {
 
 	t.Run("Does not add user when user ID not found in database", func(t *testing.T) {
 		mockStore := mocks.NewMockUsersReadWriter(t)
-		
+
 		// Mock store returns user not found
 		mockStore.EXPECT().
 			ReadUser(&user.UserSelector{ID: 999}).
 			Return(nil, false, nil).
 			Once()
 
-		app := newTestApplication(t, mockStore)
+		appInstance := app.NewTestApplication(t, mockStore)
 
-		jwt, _, err := app.newAuthenticationToken(999)
+		jwt, _, err := appInstance.NewAuthenticationToken(999)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		var capturedFound bool
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_, capturedFound = contextGetAuthenticatedUser(r)
+			_, capturedFound = context.GetAuthenticatedUser(r)
 			w.WriteHeader(http.StatusTeapot)
 		})
 
-		e := newTestExpect(t, app.authenticate(next))
+		e := newTestExpect(t, Authenticate(appInstance)(next))
 		e.GET("/test").
 			WithHeader("Authorization", "Bearer "+jwt).
 			Expect().
@@ -120,13 +122,13 @@ func TestAuthenticate(t *testing.T) {
 	})
 
 	t.Run("Returns a 401 response for malformed JWT bearer token", func(t *testing.T) {
-		app := newTestApplication(t)
+		appInstance := app.NewTestApplication(t)
 
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusTeapot)
 		})
 
-		e := newTestExpect(t, app.authenticate(next))
+		e := newTestExpect(t, Authenticate(appInstance)(next))
 		e.GET("/test").
 			WithHeader("Authorization", "Bearer bad_jwt").
 			Expect().
@@ -136,22 +138,22 @@ func TestAuthenticate(t *testing.T) {
 	})
 
 	t.Run("Returns a 401 response for JWT created with invalid secret key", func(t *testing.T) {
-		app := newTestApplication(t)
+		appInstance := app.NewTestApplication(t)
 
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusTeapot)
 		})
 
-		claims := newTestClaims()
+		claims := app.NewTestClaims()
 
-		jwt, err := claims.HMACSign(jwt.HS256, []byte("this-is-the-wrong-key"))
+		jwtToken, err := claims.HMACSign(jwt.HS256, []byte("this-is-the-wrong-key"))
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		e := newTestExpect(t, app.authenticate(next))
+		e := newTestExpect(t, Authenticate(appInstance)(next))
 		e.GET("/test").
-			WithHeader("Authorization", "Bearer "+string(jwt)).
+			WithHeader("Authorization", "Bearer "+string(jwtToken)).
 			Expect().
 			Status(http.StatusUnauthorized).
 			JSON().Object().
@@ -159,23 +161,23 @@ func TestAuthenticate(t *testing.T) {
 	})
 
 	t.Run("Returns a 401 response for JWT created with invalid issuer", func(t *testing.T) {
-		app := newTestApplication(t)
+		appInstance := app.NewTestApplication(t)
 
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusTeapot)
 		})
 
-		claims := newTestClaims()
+		claims := app.NewTestClaims()
 		claims.Issuer = "https://wrong.example.com"
 
-		jwt, err := claims.HMACSign(jwt.HS256, []byte(app.config.jwt.secretKey))
+		jwtToken, err := claims.HMACSign(jwt.HS256, []byte(appInstance.Config.JWT.SecretKey))
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		e := newTestExpect(t, app.authenticate(next))
+		e := newTestExpect(t, Authenticate(appInstance)(next))
 		e.GET("/test").
-			WithHeader("Authorization", "Bearer "+string(jwt)).
+			WithHeader("Authorization", "Bearer "+string(jwtToken)).
 			Expect().
 			Status(http.StatusUnauthorized).
 			JSON().Object().
@@ -183,23 +185,23 @@ func TestAuthenticate(t *testing.T) {
 	})
 
 	t.Run("Returns a 401 response for JWT created with invalid audience", func(t *testing.T) {
-		app := newTestApplication(t)
+		appInstance := app.NewTestApplication(t)
 
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusTeapot)
 		})
 
-		claims := newTestClaims()
+		claims := app.NewTestClaims()
 		claims.Audiences = []string{"https://wrong.example.com"}
 
-		jwt, err := claims.HMACSign(jwt.HS256, []byte(app.config.jwt.secretKey))
+		jwtToken, err := claims.HMACSign(jwt.HS256, []byte(appInstance.Config.JWT.SecretKey))
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		e := newTestExpect(t, app.authenticate(next))
+		e := newTestExpect(t, Authenticate(appInstance)(next))
 		e.GET("/test").
-			WithHeader("Authorization", "Bearer "+string(jwt)).
+			WithHeader("Authorization", "Bearer "+string(jwtToken)).
 			Expect().
 			Status(http.StatusUnauthorized).
 			JSON().Object().
@@ -207,25 +209,25 @@ func TestAuthenticate(t *testing.T) {
 	})
 
 	t.Run("Returns a 401 response for expired JWT", func(t *testing.T) {
-		app := newTestApplication(t)
+		appInstance := app.NewTestApplication(t)
 
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusTeapot)
 		})
 
-		claims := newTestClaims()
+		claims := app.NewTestClaims()
 		claims.Issued = jwt.NewNumericTime(time.Now().Add(-1 * time.Hour))
 		claims.NotBefore = jwt.NewNumericTime(time.Now().Add(-1 * time.Hour))
 		claims.Expires = jwt.NewNumericTime(time.Now().Add(-1 * time.Second))
 
-		jwt, err := claims.HMACSign(jwt.HS256, []byte(app.config.jwt.secretKey))
+		jwtToken, err := claims.HMACSign(jwt.HS256, []byte(appInstance.Config.JWT.SecretKey))
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		e := newTestExpect(t, app.authenticate(next))
+		e := newTestExpect(t, Authenticate(appInstance)(next))
 		e.GET("/test").
-			WithHeader("Authorization", "Bearer "+string(jwt)).
+			WithHeader("Authorization", "Bearer "+string(jwtToken)).
 			Expect().
 			Status(http.StatusUnauthorized).
 			JSON().Object().
@@ -233,25 +235,25 @@ func TestAuthenticate(t *testing.T) {
 	})
 
 	t.Run("Returns a 401 response for not-yet issued JWT", func(t *testing.T) {
-		app := newTestApplication(t)
+		appInstance := app.NewTestApplication(t)
 
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusTeapot)
 		})
 
-		claims := newTestClaims()
+		claims := app.NewTestClaims()
 		claims.Issued = jwt.NewNumericTime(time.Now().Add(time.Second))
 		claims.NotBefore = jwt.NewNumericTime(time.Now().Add(time.Second))
 		claims.Expires = jwt.NewNumericTime(time.Now().Add(time.Hour))
 
-		jwt, err := claims.HMACSign(jwt.HS256, []byte(app.config.jwt.secretKey))
+		jwtToken, err := claims.HMACSign(jwt.HS256, []byte(appInstance.Config.JWT.SecretKey))
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		e := newTestExpect(t, app.authenticate(next))
+		e := newTestExpect(t, Authenticate(appInstance)(next))
 		e.GET("/test").
-			WithHeader("Authorization", "Bearer "+string(jwt)).
+			WithHeader("Authorization", "Bearer "+string(jwtToken)).
 			Expect().
 			Status(http.StatusUnauthorized).
 			JSON().Object().
@@ -262,22 +264,22 @@ func TestAuthenticate(t *testing.T) {
 func TestRequireAuthenticatedUser(t *testing.T) {
 	t.Run("Allows authenticated user to proceed", func(t *testing.T) {
 		mockStore := mocks.NewMockUsersReadWriter(t)
-		
+
 		aliceUser := &user.User{
-			ID:               testUsers["alice"].id,
-			Email:            testUsers["alice"].email,
-			HashedPassword:   testUsers["alice"].hashedPassword,
-			SubscriptionTier: testUsers["alice"].subscriptionTier,
+			ID:               app.TestUsers["alice"].ID,
+			Email:            app.TestUsers["alice"].Email,
+			HashedPassword:   app.TestUsers["alice"].HashedPassword,
+			SubscriptionTier: app.TestUsers["alice"].SubscriptionTier,
 		}
-		
+
 		mockStore.EXPECT().
-			ReadUser(&user.UserSelector{ID: testUsers["alice"].id}).
+			ReadUser(&user.UserSelector{ID: app.TestUsers["alice"].ID}).
 			Return(aliceUser, true, nil).
 			Once()
 
-		app := newTestApplication(t, mockStore)
+		appInstance := app.NewTestApplication(t, mockStore)
 
-		jwt, _, err := app.newAuthenticationToken(testUsers["alice"].id)
+		jwt, _, err := appInstance.NewAuthenticationToken(app.TestUsers["alice"].ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -286,7 +288,7 @@ func TestRequireAuthenticatedUser(t *testing.T) {
 			w.WriteHeader(http.StatusTeapot)
 		})
 
-		e := newTestExpect(t, app.authenticate(app.requireAuthenticatedUser(next)))
+		e := newTestExpect(t, Authenticate(appInstance)(RequireAuthenticatedUser(appInstance)(next)))
 		e.GET("/restricted").
 			WithHeader("Authorization", "Bearer "+jwt).
 			Expect().
@@ -294,13 +296,13 @@ func TestRequireAuthenticatedUser(t *testing.T) {
 	})
 
 	t.Run("Sends unauthenticated user a 401 response", func(t *testing.T) {
-		app := newTestApplication(t)
+		appInstance := app.NewTestApplication(t)
 
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusTeapot)
 		})
 
-		e := newTestExpect(t, app.authenticate(app.requireAuthenticatedUser(next)))
+		e := newTestExpect(t, Authenticate(appInstance)(RequireAuthenticatedUser(appInstance)(next)))
 		e.GET("/test").
 			Expect().
 			Status(http.StatusUnauthorized).
@@ -311,19 +313,19 @@ func TestRequireAuthenticatedUser(t *testing.T) {
 
 func TestRequireBasicAuthentication(t *testing.T) {
 	t.Run("Allows user with valid basic auth credentials to proceed", func(t *testing.T) {
-		app := newTestApplication(t)
+		appInstance := app.NewTestApplication(t)
 		authUsername := "admin"
 		authPassword := "placeholder*77"
 		validHashedPassword := "$2a$04$HLvpR86.wXVT.2KHHkUbFe4/ou3wYGnc9FD7VcKaixofed5enOS.W"
 
-		app.config.basicAuth.username = authUsername
-		app.config.basicAuth.hashedPassword = validHashedPassword
+		appInstance.Config.BasicAuth.Username = authUsername
+		appInstance.Config.BasicAuth.HashedPassword = validHashedPassword
 
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusTeapot)
 		})
 
-		e := newTestExpect(t, app.requireBasicAuthentication(next))
+		e := newTestExpect(t, RequireBasicAuthentication(appInstance)(next))
 		e.GET("/test").
 			WithBasicAuth(authUsername, authPassword).
 			Expect().
@@ -361,16 +363,16 @@ func TestRequireBasicAuthentication(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				app := newTestApplication(t)
+				appInstance := app.NewTestApplication(t)
 
-				app.config.basicAuth.username = validUsername
-				app.config.basicAuth.hashedPassword = validHashedPassword
+				appInstance.Config.BasicAuth.Username = validUsername
+				appInstance.Config.BasicAuth.HashedPassword = validHashedPassword
 
 				next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusTeapot)
 				})
 
-				e := newTestExpect(t, app.requireBasicAuthentication(next))
+				e := newTestExpect(t, RequireBasicAuthentication(appInstance)(next))
 				req := e.GET("/test")
 
 				if tt.setAuth {
@@ -379,7 +381,7 @@ func TestRequireBasicAuthentication(t *testing.T) {
 
 				resp := req.Expect().
 					Status(http.StatusUnauthorized)
-				
+
 				resp.Header("WWW-Authenticate").IsEqual(`Basic realm="restricted", charset="UTF-8"`)
 				resp.JSON().Object().
 					Value("Error").IsEqual("You must be authenticated to access this resource")

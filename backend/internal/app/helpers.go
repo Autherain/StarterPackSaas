@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"strconv"
@@ -7,7 +7,7 @@ import (
 	"github.com/pascaldekloe/jwt"
 )
 
-func (app *application) newAuthenticationToken(userID int) (string, time.Time, error) {
+func (app *Application) NewAuthenticationToken(userID int) (string, time.Time, error) {
 	now := time.Now()
 
 	var claims jwt.Claims
@@ -18,9 +18,9 @@ func (app *application) newAuthenticationToken(userID int) (string, time.Time, e
 	claims.NotBefore = jwt.NewNumericTime(now)
 	claims.Expires = jwt.NewNumericTime(expiry)
 
-	claims.Issuer = app.config.baseURL
-	claims.Audiences = []string{app.config.baseURL}
+	claims.Issuer = app.Config.BaseURL
+	claims.Audiences = []string{app.Config.BaseURL}
 
-	jwt, err := claims.HMACSign(jwt.HS256, []byte(app.config.jwt.secretKey))
+	jwt, err := claims.HMACSign(jwt.HS256, []byte(app.Config.JWT.SecretKey))
 	return string(jwt), expiry, err
 }

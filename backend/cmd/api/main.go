@@ -6,12 +6,12 @@ import (
 	"log/slog"
 	"os"
 	"runtime/debug"
-	"sync"
 
+	"github.com/autherain/test/internal/app"
 	"github.com/autherain/test/internal/database"
 	"github.com/autherain/test/internal/errors"
+	"github.com/autherain/test/internal/server"
 	"github.com/autherain/test/internal/store"
-	"github.com/autherain/test/internal/user/server"
 	"github.com/autherain/test/internal/version"
 )
 
@@ -26,46 +26,17 @@ func main() {
 	}
 }
 
-type config struct {
-	baseURL   string
-	httpPort  int
-	basicAuth struct {
-		username       string
-		hashedPassword string
-	}
-	cookie struct {
-		secretKey string
-	}
-	db struct {
-		dsn         string
-		automigrate bool
-	}
-	jwt struct {
-		secretKey string
-	}
-}
-
-type application struct {
-	config       config
-	db           *database.DB
-	store        *store.Store
-	userServer   *server.Server
-	logger       *slog.Logger
-	errorHandler *errors.Handler
-	wg           sync.WaitGroup
-}
-
 func run(logger *slog.Logger) error {
-	var cfg config
+	var cfg app.Config
 
-	flag.StringVar(&cfg.baseURL, "base-url", "http://localhost:9798", "base URL for the application")
-	flag.IntVar(&cfg.httpPort, "http-port", 9798, "port to listen on for HTTP requests")
-	flag.StringVar(&cfg.basicAuth.username, "basic-auth-username", "admin", "basic auth username")
-	flag.StringVar(&cfg.basicAuth.hashedPassword, "basic-auth-hashed-password", "$2a$10$jRb2qniNcoCyQM23T59RfeEQUbgdAXfR6S0scynmKfJa5Gj3arGJa", "basic auth password hashed with bcrpyt")
-	flag.StringVar(&cfg.cookie.secretKey, "cookie-secret-key", "mflpw6hs4mdzads3s5kxjgtoltlgp3sp", "secret key for cookie authentication/encryption")
-	flag.StringVar(&cfg.db.dsn, "db-dsn", "user:pass@localhost:5432/db", "postgreSQL DSN")
-	flag.BoolVar(&cfg.db.automigrate, "db-automigrate", true, "run migrations on startup")
-	flag.StringVar(&cfg.jwt.secretKey, "jwt-secret-key", "q54isdosxiujnhjwmxrscqohr2tfm2c7", "secret key for JWT authentication")
+	flag.StringVar(&cfg.BaseURL, "base-url", "http://localhost:9798", "base URL for the application")
+	flag.IntVar(&cfg.HTTPPort, "http-port", 9798, "port to listen on for HTTP requests")
+	flag.StringVar(&cfg.BasicAuth.Username, "basic-auth-username", "admin", "basic auth username")
+	flag.StringVar(&cfg.BasicAuth.HashedPassword, "basic-auth-hashed-password", "$2a$10$jRb2qniNcoCyQM23T59RfeEQUbgdAXfR6S0scynmKfJa5Gj3arGJa", "basic auth password hashed with bcrpyt")
+	flag.StringVar(&cfg.Cookie.SecretKey, "cookie-secret-key", "mflpw6hs4mdzads3s5kxjgtoltlgp3sp", "secret key for cookie authentication/encryption")
+	flag.StringVar(&cfg.DB.DSN, "db-dsn", "user:pass@localhost:5432/db", "postgreSQL DSN")
+	flag.BoolVar(&cfg.DB.Automigrate, "db-automigrate", true, "run migrations on startup")
+	flag.StringVar(&cfg.JWT.SecretKey, "jwt-secret-key", "q54isdosxiujnhjwmxrscqohr2tfm2c7", "secret key for JWT authentication")
 
 	showVersion := flag.Bool("version", false, "display version and exit")
 
@@ -76,13 +47,13 @@ func run(logger *slog.Logger) error {
 		return nil
 	}
 
-	db, err := database.New(cfg.db.dsn)
+	db, err := database.New(cfg.DB.DSN)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	if cfg.db.automigrate {
+	if cfg.DB.Automigrate {
 		err = db.MigrateUp()
 		if err != nil {
 			return err
@@ -94,20 +65,8 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	app := &application{
-		config:       cfg,
-		db:           db,
-		store:        store,
-		logger:       logger,
-		errorHandler: errors.New(logger),
-	}
+	errorHandler := errors.New(logger)
+	application := app.New(cfg, db, store, logger, errorHandler)
 
-	// Initialize user server
-	app.userServer = server.New(
-		app.store.Users,
-		app.errorHandler.ServerError,
-		app.errorHandler.FailedValidation,
-	)
-
-	return app.serveHTTP()
+	return server.ServeHTTP(application)
 }

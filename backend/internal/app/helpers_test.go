@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"strconv"
@@ -10,12 +10,12 @@ import (
 )
 
 func TestNewAuthenticationToken(t *testing.T) {
-	app := newTestApplication(t)
+	app := NewTestApplication(t)
 
 	t.Run("generates valid JWT token and expiry time", func(t *testing.T) {
 		userID := 123
 
-		token, expiry, err := app.newAuthenticationToken(userID)
+		token, expiry, err := app.NewAuthenticationToken(userID)
 		assert.Nil(t, err)
 		assert.Regexp(t, `^eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$`, token)
 		assert.True(t, expiry.After(time.Now()))
@@ -23,15 +23,15 @@ func TestNewAuthenticationToken(t *testing.T) {
 
 	t.Run("token contains correct claims", func(t *testing.T) {
 		userID := 456
-		token, _, err := app.newAuthenticationToken(userID)
+		token, _, err := app.NewAuthenticationToken(userID)
 		assert.Nil(t, err)
 
-		claims, err := jwt.HMACCheck([]byte(token), []byte(app.config.jwt.secretKey))
+		claims, err := jwt.HMACCheck([]byte(token), []byte(app.Config.JWT.SecretKey))
 		assert.Nil(t, err)
 		assert.Equal(t, strconv.Itoa(userID), claims.Subject)
-		assert.Equal(t, app.config.baseURL, claims.Issuer)
+		assert.Equal(t, app.Config.BaseURL, claims.Issuer)
 		assert.Equal(t, 1, len(claims.Audiences))
-		assert.Equal(t, app.config.baseURL, claims.Audiences[0])
+		assert.Equal(t, app.Config.BaseURL, claims.Audiences[0])
 
 		assert.True(t, time.Since(claims.Issued.Time()) < time.Second)
 		assert.True(t, time.Since(claims.NotBefore.Time()) < time.Second)
@@ -42,14 +42,14 @@ func TestNewAuthenticationToken(t *testing.T) {
 
 	t.Run("generates different tokens on subsequent calls", func(t *testing.T) {
 		userID := 100
-		token1, _, err := app.newAuthenticationToken(userID)
+		token1, _, err := app.NewAuthenticationToken(userID)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
 		time.Sleep(10 * time.Millisecond)
 
-		token2, _, err := app.newAuthenticationToken(userID)
+		token2, _, err := app.NewAuthenticationToken(userID)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

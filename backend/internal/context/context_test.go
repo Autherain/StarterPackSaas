@@ -1,4 +1,4 @@
-package main
+package context
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestContextSetAuthenticatedUser(t *testing.T) {
+func TestSetAuthenticatedUser(t *testing.T) {
 	testUser := user.User{
 		ID:             123,
 		Created:        time.Now(),
@@ -23,19 +23,19 @@ func TestContextSetAuthenticatedUser(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		modifiedReq := contextSetAuthenticatedUser(originalReq, testUser)
+		modifiedReq := SetAuthenticatedUser(originalReq, testUser)
 
-		retrievedUser, found := originalReq.Context().Value(authenticatedUserContextKey).(user.User)
+		retrievedUser, found := originalReq.Context().Value(AuthenticatedUserKey).(user.User)
 		assert.False(t, found)
 		assert.Equal(t, user.User{}, retrievedUser)
 
-		retrievedUser, found = modifiedReq.Context().Value(authenticatedUserContextKey).(user.User)
+		retrievedUser, found = modifiedReq.Context().Value(AuthenticatedUserKey).(user.User)
 		assert.True(t, found)
 		assert.Equal(t, testUser, retrievedUser)
 	})
 }
 
-func TestContextGetAuthenticatedUser(t *testing.T) {
+func TestGetAuthenticatedUser(t *testing.T) {
 	testUser := user.User{
 		ID:             123,
 		Created:        time.Now(),
@@ -48,10 +48,10 @@ func TestContextGetAuthenticatedUser(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		ctx := context.WithValue(req.Context(), authenticatedUserContextKey, testUser)
+		ctx := context.WithValue(req.Context(), AuthenticatedUserKey, testUser)
 		req = req.WithContext(ctx)
 
-		retrievedUser, found := contextGetAuthenticatedUser(req)
+		retrievedUser, found := GetAuthenticatedUser(req)
 		assert.True(t, found)
 		assert.Equal(t, testUser, retrievedUser)
 	})
@@ -62,7 +62,7 @@ func TestContextGetAuthenticatedUser(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		retrievedUser, found := contextGetAuthenticatedUser(req)
+		retrievedUser, found := GetAuthenticatedUser(req)
 		assert.False(t, found)
 		assert.Equal(t, user.User{}, retrievedUser)
 	})
@@ -72,10 +72,10 @@ func TestContextGetAuthenticatedUser(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		ctx := context.WithValue(req.Context(), authenticatedUserContextKey, 123)
+		ctx := context.WithValue(req.Context(), AuthenticatedUserKey, 123)
 		req = req.WithContext(ctx)
 
-		retrievedUser, found := contextGetAuthenticatedUser(req)
+		retrievedUser, found := GetAuthenticatedUser(req)
 		assert.False(t, found)
 		assert.Equal(t, user.User{}, retrievedUser)
 	})
