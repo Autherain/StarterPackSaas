@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/autherain/test/internal/user"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestContextSetAuthenticatedUser(t *testing.T) {

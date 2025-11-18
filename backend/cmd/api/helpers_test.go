@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/pascaldekloe/jwt"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewAuthenticationToken(t *testing.T) {
