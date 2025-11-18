@@ -38,7 +38,6 @@ func (s *usersStore) CreateUser(u *user.User) error {
 		return err
 	}
 
-	u.ID = model.ID
 	return nil
 }
 
