@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"net/http"
 	"strconv"
 	"time"
 
@@ -25,24 +23,4 @@ func (app *application) newAuthenticationToken(userID int) (string, time.Time, e
 
 	jwt, err := claims.HMACSign(jwt.HS256, []byte(app.config.jwt.secretKey))
 	return string(jwt), expiry, err
-}
-
-func (app *application) backgroundTask(r *http.Request, fn func() error) {
-	app.wg.Add(1)
-
-	go func() {
-		defer app.wg.Done()
-
-		defer func() {
-			pv := recover()
-			if pv != nil {
-				app.reportServerError(r, fmt.Errorf("%v", pv))
-			}
-		}()
-
-		err := fn()
-		if err != nil {
-			app.reportServerError(r, err)
-		}
-	}()
 }

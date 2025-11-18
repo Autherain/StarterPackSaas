@@ -1,0 +1,12 @@
+all: false
+dir: "{{.InterfaceDir}}/mocks"
+filename: "mock_{{.InterfaceName}}.go"
+pkgname: mocks
+formatter: goimports
+log-level: info
+packages:
+  github.com/autherain/test/internal/user:
+    interfaces:
+      UsersReadWriter:
+
+

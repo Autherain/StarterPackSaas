@@ -4,57 +4,37 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 func (app *application) routes() http.Handler {
 	mux := chi.NewRouter()
 
-	mux.NotFound(app.notFound)
-	mux.MethodNotAllowed(app.methodNotAllowed)
+	mux.NotFound(app.errorHandler.NotFound)
+	mux.MethodNotAllowed(app.errorHandler.MethodNotAllowed)
 
-	mux.Use(app.logAccess)
-	mux.Use(app.recoverPanic)
+	mux.Use(middleware.RealIP)
+	mux.Use(middleware.Logger)
+	mux.Use(middleware.Recoverer)
 	mux.Use(app.authenticate)
+	mux.Use(middleware.Heartbeat("/health"))
 
-	mux.Get("/status", app.status)
-	mux.Post("/users", app.createUser)
+	mux.Post("/users", app.userServer.HandleCreateUser)
 	mux.Post("/authentication-tokens", app.createAuthenticationToken)
 
 	mux.Group(func(mux chi.Router) {
 		mux.Use(app.requireAuthenticatedUser)
 
-		mux.Get("/restricted", app.restricted)
 	})
 
 	mux.Group(func(mux chi.Router) {
 		mux.Use(app.requireBasicAuthentication)
 
-		mux.Get("/restricted-basic-auth", app.restricted)
-	})
-
-	// Example: Pro tier or higher required
-	mux.Group(func(mux chi.Router) {
-		mux.Use(app.requireAuthenticatedUser)
-		mux.Use(app.requireTierOrHigher("pro"))
-
-		mux.Get("/pro-features", app.restricted)
-	})
-
-	// Example: Enterprise tier only
-	mux.Group(func(mux chi.Router) {
-		mux.Use(app.requireAuthenticatedUser)
-		mux.Use(app.requireTier("enterprise"))
-
-		mux.Get("/enterprise-features", app.restricted)
-	})
-
-	// Example: Multiple tiers allowed (pro or enterprise)
-	mux.Group(func(mux chi.Router) {
-		mux.Use(app.requireAuthenticatedUser)
-		mux.Use(app.requireTier("pro", "enterprise"))
-
-		mux.Get("/premium-features", app.restricted)
 	})
 
 	return mux
+}
+
+func (app *application) createAuthenticationToken(w http.ResponseWriter, r *http.Request) {
+	app.userServer.HandleCreateAuthenticationToken(w, r, app.newAuthenticationToken)
 }

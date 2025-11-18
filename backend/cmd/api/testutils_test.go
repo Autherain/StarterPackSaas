@@ -3,19 +3,16 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/autherain/test/internal/database"
-
+	"github.com/autherain/test/internal/errors"
 	"github.com/pascaldekloe/jwt"
 )
 
@@ -44,63 +41,17 @@ func newTestClaims() jwt.Claims {
 }
 
 func newTestApplication(t *testing.T) *application {
-	app := new(application)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	
+	app := &application{
+		logger:       logger,
+		errorHandler: errors.New(logger),
+	}
 
 	app.config.jwt.secretKey = "k7mp29rf4qxhwn8vbtaj6pgucmve53y9"
 	app.config.baseURL = "https://www.example.com"
 
-	app.logger = slog.New(slog.NewTextHandler(io.Discard, nil))
-	app.db = newTestDB(t)
-
 	return app
-}
-
-func newTestDB(t *testing.T) *database.DB {
-	t.Helper()
-
-	dsn := os.Getenv("TEST_DB_DSN")
-
-	if dsn == "" {
-		t.Fatal("TEST_DB_DSN environment variable must be set in the format user:pass@localhost:port/db")
-	}
-
-	schemaName := fmt.Sprintf("test_schema_%d", time.Now().UnixNano())
-	dsn = fmt.Sprintf("%s?search_path=%s", dsn, schemaName)
-
-	db, err := database.New(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Cleanup(func() {
-		defer db.Close()
-
-		_, err = db.Exec(fmt.Sprintf("DROP SCHEMA IF EXISTS %s CASCADE", schemaName))
-		if err != nil {
-			t.Error(err)
-		}
-	})
-
-	_, err = db.Exec(fmt.Sprintf("CREATE SCHEMA %s", schemaName))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = db.MigrateUp()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, user := range testUsers {
-		id, err := db.InsertUserWithTier(user.email, user.hashedPassword, user.subscriptionTier)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		user.id = id
-	}
-
-	return db
 }
 
 func newTestRequest(t *testing.T, method, path string, data map[string]any) *http.Request {

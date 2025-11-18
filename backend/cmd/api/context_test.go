@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/autherain/test/internal/assert"
-	"github.com/autherain/test/internal/database"
+	"github.com/autherain/test/internal/user"
 )
 
 func TestContextSetAuthenticatedUser(t *testing.T) {
-	testUser := database.User{
+	testUser := user.User{
 		ID:             123,
 		Created:        time.Now(),
 		Email:          "alice@example.com",
@@ -22,18 +22,18 @@ func TestContextSetAuthenticatedUser(t *testing.T) {
 		originalReq := newTestRequest(t, http.MethodGet, "/test", nil)
 		modifiedReq := contextSetAuthenticatedUser(originalReq, testUser)
 
-		retrievedUser, found := originalReq.Context().Value(authenticatedUserContextKey).(database.User)
+		retrievedUser, found := originalReq.Context().Value(authenticatedUserContextKey).(user.User)
 		assert.False(t, found)
-		assert.Equal(t, retrievedUser, database.User{})
+		assert.Equal(t, retrievedUser, user.User{})
 
-		retrievedUser, found = modifiedReq.Context().Value(authenticatedUserContextKey).(database.User)
+		retrievedUser, found = modifiedReq.Context().Value(authenticatedUserContextKey).(user.User)
 		assert.True(t, found)
 		assert.Equal(t, retrievedUser, testUser)
 	})
 }
 
 func TestContextGetAuthenticatedUser(t *testing.T) {
-	testUser := database.User{
+	testUser := user.User{
 		ID:             123,
 		Created:        time.Now(),
 		Email:          "alice@example.com",
@@ -57,7 +57,7 @@ func TestContextGetAuthenticatedUser(t *testing.T) {
 
 		retrievedUser, found := contextGetAuthenticatedUser(req)
 		assert.False(t, found)
-		assert.Equal(t, retrievedUser, database.User{})
+		assert.Equal(t, retrievedUser, user.User{})
 	})
 
 	t.Run("Returns zero user and false if wrong type", func(t *testing.T) {
@@ -68,6 +68,6 @@ func TestContextGetAuthenticatedUser(t *testing.T) {
 
 		retrievedUser, found := contextGetAuthenticatedUser(req)
 		assert.False(t, found)
-		assert.Equal(t, retrievedUser, database.User{})
+		assert.Equal(t, retrievedUser, user.User{})
 	})
 }

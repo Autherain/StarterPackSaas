@@ -9,6 +9,9 @@ import (
 	"sync"
 
 	"github.com/autherain/test/internal/database"
+	"github.com/autherain/test/internal/errors"
+	"github.com/autherain/test/internal/store"
+	"github.com/autherain/test/internal/user/server"
 	"github.com/autherain/test/internal/version"
 )
 
@@ -43,10 +46,13 @@ type config struct {
 }
 
 type application struct {
-	config config
-	db     *database.DB
-	logger *slog.Logger
-	wg     sync.WaitGroup
+	config       config
+	db           *database.DB
+	store        *store.Store
+	userServer   *server.Server
+	logger       *slog.Logger
+	errorHandler *errors.Handler
+	wg           sync.WaitGroup
 }
 
 func run(logger *slog.Logger) error {
@@ -83,11 +89,25 @@ func run(logger *slog.Logger) error {
 		}
 	}
 
-	app := &application{
-		config: cfg,
-		db:     db,
-		logger: logger,
+	store, err := store.New(store.WithDB(db.DB))
+	if err != nil {
+		return err
 	}
+
+	app := &application{
+		config:       cfg,
+		db:           db,
+		store:        store,
+		logger:       logger,
+		errorHandler: errors.New(logger),
+	}
+
+	// Initialize user server
+	app.userServer = server.New(
+		app.store.Users,
+		app.errorHandler.ServerError,
+		app.errorHandler.FailedValidation,
+	)
 
 	return app.serveHTTP()
 }

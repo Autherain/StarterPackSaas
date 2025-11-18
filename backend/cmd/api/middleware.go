@@ -2,52 +2,16 @@ package main
 
 import (
 	"errors"
-	"fmt"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/autherain/test/internal/response"
+	"github.com/autherain/test/internal/user"
 
 	"github.com/pascaldekloe/jwt"
-	"github.com/tomasen/realip"
 	"golang.org/x/crypto/bcrypt"
 )
-
-func (app *application) recoverPanic(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			pv := recover()
-			if pv != nil {
-				app.serverError(w, r, fmt.Errorf("%v", pv))
-			}
-		}()
-
-		next.ServeHTTP(w, r)
-	})
-}
-
-func (app *application) logAccess(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mw := response.NewMetricsResponseWriter(w)
-		next.ServeHTTP(mw, r)
-
-		var (
-			ip     = realip.FromRequest(r)
-			method = r.Method
-			url    = r.URL.String()
-			proto  = r.Proto
-		)
-
-		userAttrs := slog.Group("user", "ip", ip)
-		requestAttrs := slog.Group("request", "method", method, "url", url, "proto", proto)
-		responseAttrs := slog.Group("response", "status", mw.StatusCode, "size", mw.BytesCount)
-
-		app.logger.Info("access", userAttrs, requestAttrs, responseAttrs)
-	})
-}
 
 func (app *application) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -63,39 +27,39 @@ func (app *application) authenticate(next http.Handler) http.Handler {
 
 				claims, err := jwt.HMACCheck([]byte(token), []byte(app.config.jwt.secretKey))
 				if err != nil {
-					app.invalidAuthenticationToken(w, r)
+					app.errorHandler.InvalidAuthenticationToken(w, r)
 					return
 				}
 
 				if !claims.Valid(time.Now()) {
-					app.invalidAuthenticationToken(w, r)
+					app.errorHandler.InvalidAuthenticationToken(w, r)
 					return
 				}
 
 				if claims.Issuer != app.config.baseURL {
-					app.invalidAuthenticationToken(w, r)
+					app.errorHandler.InvalidAuthenticationToken(w, r)
 					return
 				}
 
 				if !claims.AcceptAudience(app.config.baseURL) {
-					app.invalidAuthenticationToken(w, r)
+					app.errorHandler.InvalidAuthenticationToken(w, r)
 					return
 				}
 
 				userID, err := strconv.Atoi(claims.Subject)
 				if err != nil {
-					app.serverError(w, r, err)
+					app.errorHandler.ServerError(w, r, err)
 					return
 				}
 
-				user, found, err := app.db.GetUser(userID)
+				user, found, err := app.store.Users.ReadUser(&user.UserSelector{ID: userID})
 				if err != nil {
-					app.serverError(w, r, err)
+					app.errorHandler.ServerError(w, r, err)
 					return
 				}
 
 				if found {
-					r = contextSetAuthenticatedUser(r, user)
+					r = contextSetAuthenticatedUser(r, *user)
 				}
 			}
 		}
@@ -109,7 +73,7 @@ func (app *application) requireAuthenticatedUser(next http.Handler) http.Handler
 		_, found := contextGetAuthenticatedUser(r)
 
 		if !found {
-			app.authenticationRequired(w, r)
+			app.errorHandler.AuthenticationRequired(w, r)
 			return
 		}
 
@@ -121,22 +85,22 @@ func (app *application) requireBasicAuthentication(next http.Handler) http.Handl
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		username, plaintextPassword, ok := r.BasicAuth()
 		if !ok {
-			app.basicAuthenticationRequired(w, r)
+			app.errorHandler.BasicAuthenticationRequired(w, r)
 			return
 		}
 
 		if app.config.basicAuth.username != username {
-			app.basicAuthenticationRequired(w, r)
+			app.errorHandler.BasicAuthenticationRequired(w, r)
 			return
 		}
 
 		err := bcrypt.CompareHashAndPassword([]byte(app.config.basicAuth.hashedPassword), []byte(plaintextPassword))
 		switch {
 		case errors.Is(err, bcrypt.ErrMismatchedHashAndPassword):
-			app.basicAuthenticationRequired(w, r)
+			app.errorHandler.BasicAuthenticationRequired(w, r)
 			return
 		case err != nil:
-			app.serverError(w, r, err)
+			app.errorHandler.ServerError(w, r, err)
 			return
 		}
 
@@ -149,7 +113,7 @@ func (app *application) requireTier(allowedTiers ...string) func(http.Handler) h
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user, found := contextGetAuthenticatedUser(r)
 			if !found {
-				app.authenticationRequired(w, r)
+				app.errorHandler.AuthenticationRequired(w, r)
 				return
 			}
 
@@ -162,7 +126,7 @@ func (app *application) requireTier(allowedTiers ...string) func(http.Handler) h
 			}
 
 			if !hasTier {
-				app.forbidden(w, r)
+				app.errorHandler.Forbidden(w, r)
 				return
 			}
 
@@ -182,7 +146,7 @@ func (app *application) requireTierOrHigher(minTier string) func(http.Handler) h
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user, found := contextGetAuthenticatedUser(r)
 			if !found {
-				app.authenticationRequired(w, r)
+				app.errorHandler.AuthenticationRequired(w, r)
 				return
 			}
 
@@ -190,12 +154,12 @@ func (app *application) requireTierOrHigher(minTier string) func(http.Handler) h
 			requiredLevel := tierLevels[minTier]
 
 			if userLevel == 0 {
-				app.forbidden(w, r)
+				app.errorHandler.Forbidden(w, r)
 				return
 			}
 
 			if userLevel < requiredLevel {
-				app.forbidden(w, r)
+				app.errorHandler.Forbidden(w, r)
 				return
 			}
 

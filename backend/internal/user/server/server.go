@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"net/http"
@@ -7,21 +7,28 @@ import (
 	"github.com/autherain/test/internal/password"
 	"github.com/autherain/test/internal/request"
 	"github.com/autherain/test/internal/response"
+	"github.com/autherain/test/internal/user"
 	"github.com/autherain/test/internal/validator"
 )
 
-func (app *application) status(w http.ResponseWriter, r *http.Request) {
-	data := map[string]string{
-		"Status": "OK",
-	}
+// Server handles HTTP requests for user operations.
+type Server struct {
+	users            user.UsersReadWriter
+	errorHandler     func(w http.ResponseWriter, r *http.Request, err error)
+	validationFailed func(w http.ResponseWriter, r *http.Request, v validator.Validator)
+}
 
-	err := response.JSON(w, http.StatusOK, data)
-	if err != nil {
-		app.serverError(w, r, err)
+// New creates a new user server.
+func New(users user.UsersReadWriter, errorHandler func(w http.ResponseWriter, r *http.Request, err error), validationFailed func(w http.ResponseWriter, r *http.Request, v validator.Validator)) *Server {
+	return &Server{
+		users:            users,
+		errorHandler:     errorHandler,
+		validationFailed: validationFailed,
 	}
 }
 
-func (app *application) createUser(w http.ResponseWriter, r *http.Request) {
+// HandleCreateUser handles POST /users requests.
+func (s *Server) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Email     string              `json:"Email"`
 		Password  string              `json:"Password"`
@@ -30,13 +37,13 @@ func (app *application) createUser(w http.ResponseWriter, r *http.Request) {
 
 	err := request.DecodeJSON(w, r, &input)
 	if err != nil {
-		app.badRequest(w, r, err)
+		s.errorHandler(w, r, err)
 		return
 	}
 
-	_, found, err := app.db.GetUserByEmail(input.Email)
+	_, found, err := s.users.ReadUserByEmail(input.Email)
 	if err != nil {
-		app.serverError(w, r, err)
+		s.errorHandler(w, r, err)
 		return
 	}
 
@@ -50,26 +57,40 @@ func (app *application) createUser(w http.ResponseWriter, r *http.Request) {
 	input.Validator.CheckField(validator.NotIn(input.Password, password.CommonPasswords...), "Password", "Password is too common")
 
 	if input.Validator.HasErrors() {
-		app.failedValidation(w, r, input.Validator)
+		s.validationFailed(w, r, input.Validator)
 		return
 	}
 
 	hashedPassword, err := password.Hash(input.Password)
 	if err != nil {
-		app.serverError(w, r, err)
+		s.errorHandler(w, r, err)
 		return
 	}
 
-	_, err = app.db.InsertUser(input.Email, hashedPassword)
+	newUser := &user.User{
+		Email:            input.Email,
+		HashedPassword:   hashedPassword,
+		SubscriptionTier: "free",
+	}
+
+	err = s.users.CreateUser(newUser)
 	if err != nil {
-		app.serverError(w, r, err)
+		s.errorHandler(w, r, err)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (app *application) createAuthenticationToken(w http.ResponseWriter, r *http.Request) {
+// AuthenticationTokenResponse represents the response for authentication token creation.
+type AuthenticationTokenResponse struct {
+	AuthenticationToken       string
+	AuthenticationTokenExpiry string
+	User                      *user.User
+}
+
+// HandleCreateAuthenticationToken handles POST /authentication-tokens requests.
+func (s *Server) HandleCreateAuthenticationToken(w http.ResponseWriter, r *http.Request, createToken func(userID int) (string, time.Time, error)) {
 	var input struct {
 		Email     string              `json:"Email"`
 		Password  string              `json:"Password"`
@@ -78,13 +99,13 @@ func (app *application) createAuthenticationToken(w http.ResponseWriter, r *http
 
 	err := request.DecodeJSON(w, r, &input)
 	if err != nil {
-		app.badRequest(w, r, err)
+		s.errorHandler(w, r, err)
 		return
 	}
 
-	user, found, err := app.db.GetUserByEmail(input.Email)
+	u, found, err := s.users.ReadUserByEmail(input.Email)
 	if err != nil {
-		app.serverError(w, r, err)
+		s.errorHandler(w, r, err)
 		return
 	}
 
@@ -92,9 +113,9 @@ func (app *application) createAuthenticationToken(w http.ResponseWriter, r *http
 	input.Validator.CheckField(found, "Email", "Email address could not be found")
 
 	if found {
-		passwordMatches, err := password.Matches(input.Password, user.HashedPassword)
+		passwordMatches, err := password.Matches(input.Password, u.HashedPassword)
 		if err != nil {
-			app.serverError(w, r, err)
+			s.errorHandler(w, r, err)
 			return
 		}
 
@@ -103,13 +124,13 @@ func (app *application) createAuthenticationToken(w http.ResponseWriter, r *http
 	}
 
 	if input.Validator.HasErrors() {
-		app.failedValidation(w, r, input.Validator)
+		s.validationFailed(w, r, input.Validator)
 		return
 	}
 
-	jwt, expiry, err := app.newAuthenticationToken(user.ID)
+	jwt, expiry, err := createToken(u.ID)
 	if err != nil {
-		app.serverError(w, r, err)
+		s.errorHandler(w, r, err)
 		return
 	}
 
@@ -120,17 +141,6 @@ func (app *application) createAuthenticationToken(w http.ResponseWriter, r *http
 
 	err = response.JSON(w, http.StatusOK, data)
 	if err != nil {
-		app.serverError(w, r, err)
-	}
-}
-
-func (app *application) restricted(w http.ResponseWriter, r *http.Request) {
-	data := map[string]string{
-		"Message": "This is a restricted handler",
-	}
-
-	err := response.JSON(w, http.StatusOK, data)
-	if err != nil {
-		app.serverError(w, r, err)
+		s.errorHandler(w, r, err)
 	}
 }
