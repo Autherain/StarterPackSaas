@@ -1,0 +1,29 @@
+# Traefik configuration - supports both dev and production
+accessLog: {}
+api:
+  insecure: true
+entryPoints:
+  web:
+    address: ":80"
+    # Redirect all HTTP traffic to HTTPS
+    http:
+      redirections:
+        entrypoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+providers:
+  docker:
+    exposedByDefault: false
+  file:
+    filename: "/traefik.yaml"
+    watch: true
+
+# Static certificates for development (*.dev domains)
+# Traefik will use these if no certresolver is specified
+tls:
+  certificates:
+    - certFile: /certs/starterpack.dev.pem
+      keyFile: /certs/starterpack.dev.key
+

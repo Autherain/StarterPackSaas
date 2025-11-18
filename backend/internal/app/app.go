@@ -21,8 +21,7 @@ type Config struct {
 		SecretKey string
 	}
 	DB struct {
-		DSN         string
-		Automigrate bool
+		DSN string
 	}
 	JWT struct {
 		SecretKey string
