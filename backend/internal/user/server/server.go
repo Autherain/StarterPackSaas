@@ -8,6 +8,7 @@ import (
 	"github.com/autherain/test/internal/request"
 	"github.com/autherain/test/internal/response"
 	"github.com/autherain/test/internal/user"
+	"github.com/autherain/test/internal/user/params"
 	"github.com/autherain/test/internal/validator"
 )
 
@@ -29,11 +30,7 @@ func New(users user.UsersReadWriter, errorHandler func(w http.ResponseWriter, r 
 
 // HandleCreateUser handles POST /users requests.
 func (s *Server) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
-	var input struct {
-		Email     string              `json:"Email"`
-		Password  string              `json:"Password"`
-		Validator validator.Validator `json:"-"`
-	}
+	var input params.CreateUserParams
 
 	err := request.DecodeJSON(w, r, &input)
 	if err != nil {
@@ -41,23 +38,25 @@ func (s *Server) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, found, err := s.users.ReadUserByEmail(input.Email)
+	var v validator.Validator
+
+	_, found, err := s.users.ReadUser(&user.UserSelector{Email: input.Email})
 	if err != nil {
 		s.errorHandler(w, r, err)
 		return
 	}
 
-	input.Validator.CheckField(input.Email != "", "Email", "Email is required")
-	input.Validator.CheckField(validator.Matches(input.Email, validator.RgxEmail), "Email", "Must be a valid email address")
-	input.Validator.CheckField(!found, "Email", "Email is already in use")
+	v.CheckField(input.Email != "", "Email", "Email is required")
+	v.CheckField(validator.Matches(input.Email, validator.RgxEmail), "Email", "Must be a valid email address")
+	v.CheckField(!found, "Email", "Email is already in use")
 
-	input.Validator.CheckField(input.Password != "", "Password", "Password is required")
-	input.Validator.CheckField(len(input.Password) >= 8, "Password", "Password is too short")
-	input.Validator.CheckField(len(input.Password) <= 72, "Password", "Password is too long")
-	input.Validator.CheckField(validator.NotIn(input.Password, password.CommonPasswords...), "Password", "Password is too common")
+	v.CheckField(input.Password != "", "Password", "Password is required")
+	v.CheckField(len(input.Password) >= 8, "Password", "Password is too short")
+	v.CheckField(len(input.Password) <= 72, "Password", "Password is too long")
+	v.CheckField(validator.NotIn(input.Password, password.CommonPasswords...), "Password", "Password is too common")
 
-	if input.Validator.HasErrors() {
-		s.validationFailed(w, r, input.Validator)
+	if v.HasErrors() {
+		s.validationFailed(w, r, v)
 		return
 	}
 
@@ -67,11 +66,7 @@ func (s *Server) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newUser := &user.User{
-		Email:            input.Email,
-		HashedPassword:   hashedPassword,
-		SubscriptionTier: "free",
-	}
+	newUser := input.Map(hashedPassword)
 
 	err = s.users.CreateUser(newUser)
 	if err != nil {
@@ -91,11 +86,7 @@ type AuthenticationTokenResponse struct {
 
 // HandleCreateAuthenticationToken handles POST /authentication-tokens requests.
 func (s *Server) HandleCreateAuthenticationToken(w http.ResponseWriter, r *http.Request, createToken func(userID int) (string, time.Time, error)) {
-	var input struct {
-		Email     string              `json:"Email"`
-		Password  string              `json:"Password"`
-		Validator validator.Validator `json:"-"`
-	}
+	var input params.CreateAuthenticationTokenParams
 
 	err := request.DecodeJSON(w, r, &input)
 	if err != nil {
@@ -103,14 +94,16 @@ func (s *Server) HandleCreateAuthenticationToken(w http.ResponseWriter, r *http.
 		return
 	}
 
-	u, found, err := s.users.ReadUserByEmail(input.Email)
+	var v validator.Validator
+
+	u, found, err := s.users.ReadUser(&user.UserSelector{Email: input.Email})
 	if err != nil {
 		s.errorHandler(w, r, err)
 		return
 	}
 
-	input.Validator.CheckField(input.Email != "", "Email", "Email is required")
-	input.Validator.CheckField(found, "Email", "Email address could not be found")
+	v.CheckField(input.Email != "", "Email", "Email is required")
+	v.CheckField(found, "Email", "Email address could not be found")
 
 	if found {
 		passwordMatches, err := password.Matches(input.Password, u.HashedPassword)
@@ -119,12 +112,12 @@ func (s *Server) HandleCreateAuthenticationToken(w http.ResponseWriter, r *http.
 			return
 		}
 
-		input.Validator.CheckField(input.Password != "", "Password", "Password is required")
-		input.Validator.CheckField(passwordMatches, "Password", "Password is incorrect")
+		v.CheckField(input.Password != "", "Password", "Password is required")
+		v.CheckField(passwordMatches, "Password", "Password is incorrect")
 	}
 
-	if input.Validator.HasErrors() {
-		s.validationFailed(w, r, input.Validator)
+	if v.HasErrors() {
+		s.validationFailed(w, r, v)
 		return
 	}
 

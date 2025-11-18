@@ -50,7 +50,6 @@ type UserSelector struct {
 // UsersReader defines methods for reading users.
 type UsersReader interface {
 	ReadUser(selector *UserSelector) (*User, bool, error)
-	ReadUserByEmail(email string) (*User, bool, error)
 }
 
 // UsersWriter defines methods for writing users.
@@ -65,4 +64,3 @@ type UsersReadWriter interface {
 	UsersReader
 	UsersWriter
 }
-
