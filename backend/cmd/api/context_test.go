@@ -19,7 +19,10 @@ func TestContextSetAuthenticatedUser(t *testing.T) {
 	}
 
 	t.Run("Returns new request with user set and original unchanged", func(t *testing.T) {
-		originalReq := newTestRequest(t, http.MethodGet, "/test", nil)
+		originalReq, err := http.NewRequest(http.MethodGet, "/test", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
 		modifiedReq := contextSetAuthenticatedUser(originalReq, testUser)
 
 		retrievedUser, found := originalReq.Context().Value(authenticatedUserContextKey).(user.User)
@@ -41,8 +44,10 @@ func TestContextGetAuthenticatedUser(t *testing.T) {
 	}
 
 	t.Run("Successfully returns user when set", func(t *testing.T) {
-
-		req := newTestRequest(t, http.MethodGet, "/test", nil)
+		req, err := http.NewRequest(http.MethodGet, "/test", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
 		ctx := context.WithValue(req.Context(), authenticatedUserContextKey, testUser)
 		req = req.WithContext(ctx)
 
@@ -52,8 +57,10 @@ func TestContextGetAuthenticatedUser(t *testing.T) {
 	})
 
 	t.Run("Returns zero user and false when not set", func(t *testing.T) {
-
-		req := newTestRequest(t, http.MethodGet, "/test", nil)
+		req, err := http.NewRequest(http.MethodGet, "/test", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		retrievedUser, found := contextGetAuthenticatedUser(req)
 		assert.False(t, found)
@@ -61,8 +68,10 @@ func TestContextGetAuthenticatedUser(t *testing.T) {
 	})
 
 	t.Run("Returns zero user and false if wrong type", func(t *testing.T) {
-
-		req := newTestRequest(t, http.MethodGet, "/test", nil)
+		req, err := http.NewRequest(http.MethodGet, "/test", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
 		ctx := context.WithValue(req.Context(), authenticatedUserContextKey, 123)
 		req = req.WithContext(ctx)
 
