@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/autherain/test/internal/assert"
+	"github.com/stretchr/testify/assert"
 	"github.com/autherain/test/internal/user"
 )
 
@@ -27,11 +27,11 @@ func TestContextSetAuthenticatedUser(t *testing.T) {
 
 		retrievedUser, found := originalReq.Context().Value(authenticatedUserContextKey).(user.User)
 		assert.False(t, found)
-		assert.Equal(t, retrievedUser, user.User{})
+		assert.Equal(t, user.User{}, retrievedUser)
 
 		retrievedUser, found = modifiedReq.Context().Value(authenticatedUserContextKey).(user.User)
 		assert.True(t, found)
-		assert.Equal(t, retrievedUser, testUser)
+		assert.Equal(t, testUser, retrievedUser)
 	})
 }
 
@@ -53,7 +53,7 @@ func TestContextGetAuthenticatedUser(t *testing.T) {
 
 		retrievedUser, found := contextGetAuthenticatedUser(req)
 		assert.True(t, found)
-		assert.Equal(t, retrievedUser, testUser)
+		assert.Equal(t, testUser, retrievedUser)
 	})
 
 	t.Run("Returns zero user and false when not set", func(t *testing.T) {
@@ -64,7 +64,7 @@ func TestContextGetAuthenticatedUser(t *testing.T) {
 
 		retrievedUser, found := contextGetAuthenticatedUser(req)
 		assert.False(t, found)
-		assert.Equal(t, retrievedUser, user.User{})
+		assert.Equal(t, user.User{}, retrievedUser)
 	})
 
 	t.Run("Returns zero user and false if wrong type", func(t *testing.T) {
@@ -77,6 +77,6 @@ func TestContextGetAuthenticatedUser(t *testing.T) {
 
 		retrievedUser, found := contextGetAuthenticatedUser(req)
 		assert.False(t, found)
-		assert.Equal(t, retrievedUser, user.User{})
+		assert.Equal(t, user.User{}, retrievedUser)
 	})
 }

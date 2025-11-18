@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/autherain/test/internal/assert"
+	"github.com/stretchr/testify/assert"
 	"github.com/pascaldekloe/jwt"
 )
 
@@ -17,7 +17,7 @@ func TestNewAuthenticationToken(t *testing.T) {
 
 		token, expiry, err := app.newAuthenticationToken(userID)
 		assert.Nil(t, err)
-		assert.MatchesRegexp(t, token, `^eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$`)
+		assert.Regexp(t, `^eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$`, token)
 		assert.True(t, expiry.After(time.Now()))
 	})
 
@@ -28,10 +28,10 @@ func TestNewAuthenticationToken(t *testing.T) {
 
 		claims, err := jwt.HMACCheck([]byte(token), []byte(app.config.jwt.secretKey))
 		assert.Nil(t, err)
-		assert.Equal(t, claims.Subject, strconv.Itoa(userID))
-		assert.Equal(t, claims.Issuer, app.config.baseURL)
-		assert.Equal(t, len(claims.Audiences), 1)
-		assert.Equal(t, claims.Audiences[0], app.config.baseURL)
+		assert.Equal(t, strconv.Itoa(userID), claims.Subject)
+		assert.Equal(t, app.config.baseURL, claims.Issuer)
+		assert.Equal(t, 1, len(claims.Audiences))
+		assert.Equal(t, app.config.baseURL, claims.Audiences[0])
 
 		assert.True(t, time.Since(claims.Issued.Time()) < time.Second)
 		assert.True(t, time.Since(claims.NotBefore.Time()) < time.Second)

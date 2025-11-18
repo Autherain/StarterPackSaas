@@ -3,7 +3,7 @@ package validator
 import (
 	"testing"
 
-	"github.com/autherain/test/internal/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHasErrors(t *testing.T) {

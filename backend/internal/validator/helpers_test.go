@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/autherain/test/internal/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNotBlank(t *testing.T) {

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/autherain/test/internal/assert"
 	"github.com/autherain/test/internal/validator"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestReportServerError(t *testing.T) {

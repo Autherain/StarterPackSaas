@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/autherain/test/internal/assert"
 	"github.com/autherain/test/internal/user"
 	"github.com/autherain/test/internal/user/mocks"
 	"github.com/autherain/test/internal/user/server"
 	"github.com/autherain/test/internal/validator"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -252,7 +252,7 @@ func TestHandleCreateAuthenticationToken(t *testing.T) {
 		json.NewDecoder(w.Body).Decode(&response)
 
 		assert.Equal(t, "mock_jwt_token_123", response["AuthenticationToken"])
-		assert.MatchesRegexp(t, response["AuthenticationTokenExpiry"], `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$`)
+		assert.Regexp(t, `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$`, response["AuthenticationTokenExpiry"])
 	})
 
 	t.Run("Rejects non-existent email", func(t *testing.T) {

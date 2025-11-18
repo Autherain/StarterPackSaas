@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/autherain/test/internal/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestWriteAndRead(t *testing.T) {
@@ -40,7 +40,7 @@ func TestWriteAndRead(t *testing.T) {
 		}
 
 		err := Write(w, cookie)
-		assert.Equal(t, err, ErrValueTooLong)
+		assert.Equal(t, ErrValueTooLong, err)
 	})
 
 	t.Run("Returns ErrInvalidValue for tampered base64", func(t *testing.T) {
@@ -48,7 +48,7 @@ func TestWriteAndRead(t *testing.T) {
 		req.AddCookie(&http.Cookie{Name: "test", Value: "invalid-base64!"})
 
 		_, err := Read(req, "test")
-		assert.Equal(t, err, ErrInvalidValue)
+		assert.Equal(t, ErrInvalidValue, err)
 	})
 }
 
@@ -91,7 +91,7 @@ func TestWriteSignedAndReadSigned(t *testing.T) {
 		req.AddCookie(cookies[0])
 
 		_, err = ReadSigned(req, "test_cookie", "wrongSecretKeyAX7v2WqLpJ3nZcRYKt")
-		assert.Equal(t, err, ErrInvalidValue)
+		assert.Equal(t, ErrInvalidValue, err)
 	})
 
 	t.Run("Returns ErrInvalidValue for tampered signature", func(t *testing.T) {
@@ -117,7 +117,7 @@ func TestWriteSignedAndReadSigned(t *testing.T) {
 		req.AddCookie(cookies[0])
 
 		_, err = ReadSigned(req, "test_cookie", secretKey)
-		assert.Equal(t, err, ErrInvalidValue)
+		assert.Equal(t, ErrInvalidValue, err)
 	})
 
 	t.Run("Returns ErrInvalidValue for value shorter than signature", func(t *testing.T) {
@@ -126,7 +126,7 @@ func TestWriteSignedAndReadSigned(t *testing.T) {
 		req.AddCookie(&http.Cookie{Name: "test_cookie", Value: "dGVzdA=="})
 
 		_, err := ReadSigned(req, "test_cookie", "mySecretKeyAX7v2WqLpJ3nZcRYKtM9o")
-		assert.Equal(t, err, ErrInvalidValue)
+		assert.Equal(t, ErrInvalidValue, err)
 	})
 }
 
@@ -172,7 +172,7 @@ func TestWriteEncryptedAndReadEncrypted(t *testing.T) {
 		req.AddCookie(cookies[0])
 
 		_, err = ReadEncrypted(req, "test_cookie", "wrongSecretKeyAX7v2WqLpJ3nZcRYKt")
-		assert.Equal(t, err, ErrInvalidValue)
+		assert.Equal(t, ErrInvalidValue, err)
 	})
 
 	t.Run("Returns ErrInvalidValue for tampered encrypted data", func(t *testing.T) {
@@ -198,7 +198,7 @@ func TestWriteEncryptedAndReadEncrypted(t *testing.T) {
 		req.AddCookie(cookies[0])
 
 		_, err = ReadEncrypted(req, "test_cookie", secretKey)
-		assert.Equal(t, err, ErrInvalidValue)
+		assert.Equal(t, ErrInvalidValue, err)
 	})
 
 	t.Run("Returns ErrInvalidValue for value shorter than nonce", func(t *testing.T) {
@@ -207,6 +207,6 @@ func TestWriteEncryptedAndReadEncrypted(t *testing.T) {
 		req.AddCookie(&http.Cookie{Name: "test", Value: "dGVzdA=="})
 
 		_, err := ReadEncrypted(req, "test", "mySecretKeyAX7v2WqLpJ3nZcRYKtM9o")
-		assert.Equal(t, err, ErrInvalidValue)
+		assert.Equal(t, ErrInvalidValue, err)
 	})
 }

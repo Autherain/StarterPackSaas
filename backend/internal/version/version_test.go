@@ -4,7 +4,7 @@ import (
 	"runtime/debug"
 	"testing"
 
-	"github.com/autherain/test/internal/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGet(t *testing.T) {
@@ -17,7 +17,7 @@ func TestGet(t *testing.T) {
 
 		version := Get()
 		assert.True(t, version != "")
-		assert.Equal(t, version, expectedVersion)
+		assert.Equal(t, expectedVersion, version)
 	})
 }
 

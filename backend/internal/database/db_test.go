@@ -7,7 +7,7 @@ import (
 
 	"testing"
 
-	"github.com/autherain/test/internal/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func newTestDB(t *testing.T) *DB {
